@@ -1,7 +1,7 @@
 ABI_VERSION     := 0
 CURRENT_VERSION := 1.0.0
 COMPAT_VERSION  := 1.0.0
-PACKAGE_DOMAIN  := net.siguza
+#PACKAGE_DOMAIN  := net.siguza.
 
 TARGET           = libkrw
 SRC              = src
@@ -20,7 +20,7 @@ TAPI_FLAGS      ?= stubify --no-uuids --filetype=tbd-v2
 
 all: $(TARGET).$(ABI_VERSION).dylib $(TARGET).tbd
 
-deb: $(PACKAGE_DOMAIN).$(TARGET)_$(CURRENT_VERSION)_iphoneos-arm.deb $(PACKAGE_DOMAIN).$(TARGET)-dev_$(CURRENT_VERSION)_iphoneos-arm.deb
+deb: $(PACKAGE_DOMAIN)$(TARGET)_$(CURRENT_VERSION)_iphoneos-arm.deb $(PACKAGE_DOMAIN)$(TARGET)-dev_$(CURRENT_VERSION)_iphoneos-arm.deb
 
 $(TARGET).$(ABI_VERSION).dylib: $(SRC)/*.c $(INC)/*.h
 	$(IGCC) $(IGCC_FLAGS) $(DYLIB_FLAGS) -o $@ $(SRC)/*.c
@@ -29,10 +29,10 @@ $(TARGET).$(ABI_VERSION).dylib: $(SRC)/*.c $(INC)/*.h
 $(TARGET).tbd: $(TARGET).$(ABI_VERSION).dylib
 	$(TAPI) $(TAPI_FLAGS) -o $@ $<
 
-$(PACKAGE_DOMAIN).$(TARGET)_$(CURRENT_VERSION)_iphoneos-arm.deb: $(PKG)/bin/control.tar.gz $(PKG)/bin/data.tar.lzma $(PKG)/bin/debian-binary
+$(PACKAGE_DOMAIN)$(TARGET)_$(CURRENT_VERSION)_iphoneos-arm.deb: $(PKG)/bin/control.tar.gz $(PKG)/bin/data.tar.lzma $(PKG)/bin/debian-binary
 	( cd "$(PKG)/bin"; ar -cr "../../$@" 'debian-binary' 'control.tar.gz' 'data.tar.lzma'; )
 
-$(PACKAGE_DOMAIN).$(TARGET)-dev_$(CURRENT_VERSION)_iphoneos-arm.deb: $(PKG)/dev/control.tar.gz $(PKG)/dev/data.tar.lzma $(PKG)/dev/debian-binary
+$(PACKAGE_DOMAIN)$(TARGET)-dev_$(CURRENT_VERSION)_iphoneos-arm.deb: $(PKG)/dev/control.tar.gz $(PKG)/dev/data.tar.lzma $(PKG)/dev/debian-binary
 	( cd "$(PKG)/dev"; ar -cr "../../$@" 'debian-binary' 'control.tar.gz' 'data.tar.lzma'; )
 
 $(PKG)/bin/control.tar.gz: $(PKG)/bin/control
@@ -54,7 +54,7 @@ $(PKG)/dev/debian-binary: | $(PKG)/dev
 	echo '2.0' > $@
 
 $(PKG)/bin/control: | $(PKG)/bin
-	( echo 'Package: net.siguza.$(TARGET)'; \
+	( echo 'Package: $(PACKAGE_DOMAIN)$(TARGET)'; \
 	  echo 'Name: libkrw'; \
 	  echo 'Author: Siguza'; \
 	  echo 'Maintainer: Siguza'; \
@@ -67,8 +67,8 @@ $(PKG)/bin/control: | $(PKG)/bin
 	) > $@
 
 $(PKG)/dev/control: | $(PKG)/dev
-	( echo 'Package: net.siguza.$(TARGET)-dev'; \
-	  echo 'Depends: net.siguza.$(TARGET)'; \
+	( echo 'Package: $(PACKAGE_DOMAIN)$(TARGET)-dev'; \
+	  echo 'Depends: $(PACKAGE_DOMAIN)$(TARGET)'; \
 	  echo 'Name: libkrw-dev'; \
 	  echo 'Author: Siguza'; \
 	  echo 'Maintainer: Siguza'; \
