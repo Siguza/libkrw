@@ -1,3 +1,4 @@
 .DS_Store
-/libkrw.dylib
-/libkrw.tbd
+/pkg
+/*.dylib
+/*.deb

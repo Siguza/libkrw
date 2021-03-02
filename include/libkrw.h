@@ -80,7 +80,8 @@ int kwrite(void *from, uint64_t to, size_t len);
  * `size` bytes, and writes the address of that allocation to `*addr`. The
  * allocated memory is guaranteed to be readable and writeable, as well as
  * aligned to at least 8 bytes. No guarantee is made about where it is allocated
- * from, only that it is valid in the kernel's virtual address space.
+ * from, only that it is valid in the kernel's virtual address space and will
+ * remain valid until explicitly deallocated with `kdealloc`.
  * On failure, `*addr` is left unchanged.
 **/
 int kmalloc(uint64_t *addr, size_t size);
