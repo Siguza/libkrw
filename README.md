@@ -35,7 +35,7 @@ See [`include/libkrw.h`](https://github.com/Siguza/libkrw/blob/master/include/li
 3. Don't forget the `task_for_pid-allow` entitlement.
 4. If you're building a deb file, add this to your `control`:  
    ```
-   Depends: libkrw (>= 1.0.0)
+   Depends: libkrw0 (>= 1.0.0)
    ```
 
 ##### For writing your own implementation of libkrw:
@@ -44,10 +44,10 @@ See [`include/libkrw.h`](https://github.com/Siguza/libkrw/blob/master/include/li
 2. Compile with `-Wl,-install_name,/usr/lib/libkrw.0.dylib`.
 3. Add this to the `control` of your deb file:  
    ```
-   Package: your.name.libkrw
-   Provides: libkrw
-   Conflicts: libkrw
-   Replaces: libkrw
+   Package: your.name.libkrw0
+   Provides: libkrw0
+   Conflicts: libkrw0
+   Replaces: libkrw0
    ```
    Please **DO NOT** name your package just `libkrw`!
 
