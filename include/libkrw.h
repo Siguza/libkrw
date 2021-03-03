@@ -43,6 +43,52 @@ extern "C" {
  * NOT take kernel addresses as arguments.
 **/
 
+typedef int (*krw_kbase_func_t)(uint64_t *addr);
+typedef int (*krw_kread_func_t)(uint64_t from, void *to, size_t len);
+typedef int (*krw_kwrite_func_t)(void *from, uint64_t to, size_t len);
+typedef int (*krw_kmalloc_func_t)(uint64_t *addr, size_t size);
+typedef int (*krw_kdealloc_func_t)(uint64_t addr, size_t size);
+typedef int (*krw_kcall_func_t)(uint64_t func, size_t argc, const uint64_t *argv, uint64_t *ret);
+typedef int (*krw_physread_func_t)(uint64_t from, void *to, size_t len, uint8_t granule);
+typedef int (*krw_physwrite_func_t)(void *from, uint64_t to, size_t len, uint8_t granule);
+
+
+// This struct must only be extended so that old plugins can still load
+#define LIBKRW_HANDLERS_VERSION 0
+struct krw_handlers_s {
+    uint64_t version;
+    krw_kbase_func_t kbase;
+    krw_kread_func_t kread;
+    krw_kwrite_func_t kwrite;
+    krw_kmalloc_func_t kmalloc;
+    krw_kdealloc_func_t kdealloc;
+    krw_kcall_func_t kcall;
+    krw_physread_func_t physread;
+    krw_physwrite_func_t physwrite;
+};
+
+typedef struct krw_handlers_s* krw_handlers_t;
+
+/**
+ * krw_initializer_t - plugin initialization prototype
+ *
+ * Called krw_initializer_t krw_initializer is called when a plugin is opened to
+ * determine if read/write primitives are available
+ *
+ * krw_initializer should set as many of handlers->kread, handlers->kwrite, handlers->kbase,
+ * handlers->kmalloc, and handlers->kdealloc as possible on success - any not set will
+ * return unsupported.
+ *
+ * Called krw_initializer_t krw_kcall_initializer is called when a plugin is opened to
+ * determine if read/write primitives are available.  It is passed a structure containing
+ * populated kread/kwrite functions
+ *
+ * krw_kcall_initializer should set as many of handlers->kcall, handlers->physread, and
+ * handlers->physwrite as possible on success.  any not set will return unsupported.
+ *
+ * Retuns 0 if read/write are supported by this plugin
+**/
+typedef int (*krw_plugin_initializer_t)(krw_handlers_t handlers);
 
 /**
  * kbase - Kernel base

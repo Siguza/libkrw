@@ -1,219 +1,159 @@
+#include <dirent.h>
+#include <dispatch/dispatch.h>
+#include <dlfcn.h>
 #include <errno.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <mach/mach.h>
-#include "libkrw.h"
+#include <libkrw.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include "libkrw_tfp0.h"
 
-extern kern_return_t mach_vm_read_overwrite(task_t task, mach_vm_address_t addr, mach_vm_size_t size, mach_vm_address_t data, mach_vm_size_t *outsize);
-extern kern_return_t mach_vm_write(task_t task, mach_vm_address_t addr, mach_vm_address_t data, mach_msg_type_number_t dataCnt);
-extern kern_return_t mach_vm_allocate(task_t task, mach_vm_address_t *addr, mach_vm_size_t size, int flags);
-extern kern_return_t mach_vm_deallocate(task_t task, mach_vm_address_t addr, mach_vm_size_t size);
+static struct krw_handlers_s krw_handlers;
 
-static task_t gKernelTask = MACH_PORT_NULL;
+static dispatch_once_t init_krw_handlers_once;
 
-__attribute__((destructor)) static void unload(void)
+static int scandir_dylib_select(const struct dirent *entry)
 {
-    if(gKernelTask != MACH_PORT_NULL)
-    {
-        (void)mach_port_deallocate(mach_task_self(), gKernelTask);
-        gKernelTask = MACH_PORT_NULL;
-    }
+    char *ext = strrchr(entry->d_name, '.');
+    return (ext++ && strcmp(ext, "dylib") == 0);
 }
 
-static int assure_ktask(void)
+static int scandir_alpha_compar(const struct dirent **a, const struct dirent **b)
 {
-    if(gKernelTask != MACH_PORT_NULL)
-    {
-        return 0;
-    }
-
-    // hsp4
-    task_t port = MACH_PORT_NULL;
-    host_t host = mach_host_self();
-    kern_return_t ret = host_get_special_port(host, HOST_LOCAL_NODE, 4, &port);
-    if(ret == KERN_SUCCESS)
-    {
-        if(MACH_PORT_VALID(port))
-        {
-            gKernelTask = port;
-            return 0;
-        }
-    }
-    else if(ret == KERN_INVALID_ARGUMENT)
-    {
-        return EPERM;
-    }
-    else
-    {
-        return EDEVERR;
-    }
-
-    // tfp0
-    port = MACH_PORT_NULL;
-    ret = task_for_pid(mach_task_self(), 0, &port);
-    if(ret == KERN_SUCCESS)
-    {
-        if(MACH_PORT_VALID(port))
-        {
-            gKernelTask = port;
-            return 0;
-        }
-        return EDEVERR;
-    }
-    // This is ugly, but task_for_pid really doesn't tell us what's wrong,
-    // so the best we can do is guess? :/
-    return EPERM;
+    return strcmp((*a)->d_name, (*b)->d_name);
 }
 
-int kbase(uint64_t *addr)
-{
-    int r = assure_ktask();
-    if(r != 0)
-    {
-        return r;
-    }
+static int obtain_kcall_funcs(void *plugin) {
+    krw_plugin_initializer_t init = (krw_plugin_initializer_t)dlsym(plugin, "kcall_initializer");
+    if (init == NULL) return ENOTSUP;
 
-    task_dyld_info_data_t info = {};
-    uint32_t count = TASK_DYLD_INFO_COUNT;
-    kern_return_t ret = task_info(gKernelTask, TASK_DYLD_INFO, (task_info_t)&info, &count);
-    if(ret != KERN_SUCCESS)
-    {
-        return EDEVERR;
+    struct krw_handlers_s handlers = krw_handlers;
+    int r = init(&handlers);
+    if (r != 0) return r;
+
+    // We got a plugin that says it can handle kcall
+    if (handlers.kcall == NULL) {
+        return EINVAL;
     }
-    // Backwards-compat for jailbreaks that didn't set this
-    if(info.all_image_info_addr == 0 && info.all_image_info_size == 0)
-    {
-        return ENOTSUP;
+    if (handlers.version > LIBKRW_HANDLERS_VERSION) {
+        fprintf(stderr, "Detected plugin of higher API version, please update libkrw if possible\n");
     }
-    *addr = 0xfffffff007004000 + info.all_image_info_size;
+    krw_handlers.kcall = handlers.kcall;
+    krw_handlers.physread = handlers.physread;
+    krw_handlers.physwrite = handlers.physwrite;
     return 0;
 }
 
-int kread(uint64_t from, void *to, size_t len)
-{
-    // Overflow
-    if(from + len < from || (mach_vm_address_t)to + len < (mach_vm_address_t)to)
-    {
+static int obtain_krw_funcs(void *plugin) {
+    krw_plugin_initializer_t init = (krw_plugin_initializer_t)dlsym(plugin, "krw_initializer");
+    if (init == NULL) return ENOTSUP;
+
+    struct krw_handlers_s handlers = krw_handlers;
+    int r = init(&handlers);
+    if (r != 0) return r;
+
+    // We got a plugin that says it can handle krw
+    if (handlers.kread == NULL || handlers.kwrite == NULL) {
         return EINVAL;
     }
-
-    int r = assure_ktask();
-    if(r != 0)
-    {
-        return r;
+    if (handlers.version > LIBKRW_HANDLERS_VERSION) {
+        fprintf(stderr, "Detected plugin of higher API version, please update libkrw if possible\n");
     }
-
-    mach_vm_address_t dst = (mach_vm_address_t)to;
-    for(mach_vm_size_t chunk = 0; len > 0; len -= chunk)
-    {
-        chunk = len > 0xff0 ? 0xff0 : len;
-        kern_return_t ret = mach_vm_read_overwrite(gKernelTask, from, chunk, dst, &chunk);
-        if(ret == KERN_INVALID_ARGUMENT || ret == KERN_INVALID_ADDRESS)
-        {
-            return EINVAL;
-        }
-        if(ret != KERN_SUCCESS || chunk == 0)
-        {
-            // Check whether we read any bytes at all
-            return dst == (mach_vm_address_t)to ? EDEVERR : EIO;
-        }
-        from += chunk;
-        dst  += chunk;
-    }
+    krw_handlers.kbase = handlers.kbase;
+    krw_handlers.kread = handlers.kread;
+    krw_handlers.kwrite = handlers.kwrite;
+    krw_handlers.kmalloc = handlers.kmalloc;
+    krw_handlers.kdealloc = handlers.kdealloc;
     return 0;
 }
 
-int kwrite(void *from, uint64_t to, size_t len)
-{
-    // Overflow
-    if((mach_vm_address_t)from + len < (mach_vm_address_t)from || to + len < to)
-    {
-        return EINVAL;
-    }
-
-    int r = assure_ktask();
-    if(r != 0)
-    {
-        return r;
-    }
-
-    mach_vm_address_t src = (mach_vm_address_t)from;
-    for(mach_vm_size_t chunk = 0; len > 0; len -= chunk)
-    {
-        chunk = len > 0xff0 ? 0xff0 : len;
-        kern_return_t ret = mach_vm_write(gKernelTask, to, src, chunk);
-        if(ret == KERN_INVALID_ARGUMENT || ret == KERN_INVALID_ADDRESS)
-        {
-            return EINVAL;
+static void iterate_plugins(int (*callback)(void *), void **check) {
+    struct dirent **plugins;
+    ssize_t nument = scandir("/usr/lib/libkrw", &plugins, &scandir_dylib_select, &scandir_alpha_compar);
+    // Load any kcall handlers
+    if (nument != -1) {
+        char *path = strdup("/usr/lib/libkrw/");
+        size_t path_size = strlen("/usr/lib/libkrw/");
+        for (int i=0; (krw_handlers.kread == NULL || krw_handlers.kcall == NULL) && i<nument; i++) {
+            size_t plugin_path_len = strlen("/usr/lib/libkrw/") + plugins[i]->d_namlen;
+            if (path_size < plugin_path_len) {
+                char *newpath = realloc(path, plugin_path_len + 1);
+                if (newpath == NULL) {
+                    fprintf(stderr, "Fatal Error: unable to realloc\n");
+                    continue; // We failed to realloc - try next plugin I guess
+                }
+            }
+            strcpy(path+strlen("/usr/lib/libkrw/"), plugins[i]->d_name);
+            void *plugin = dlopen(path, RTLD_LOCAL|RTLD_LAZY);
+            if (plugin == NULL) {
+                fprintf(stderr, "Error attempting to load plugin %s: %s\n", path, dlerror());
+                continue;
+            }
+            if (*check == NULL) {
+                if (callback(plugin) == EINVAL) {
+                    fprintf(stderr, "KRW plugin %s did not provide functions it purported to provide\n", path);
+                }
+            }
+            // We failed, try next
+            dlclose(plugin);
         }
-        if(ret != KERN_SUCCESS)
-        {
-            // Check whether we wrote any bytes at all
-            return src == (mach_vm_address_t)from ? EDEVERR : EIO;
-        }
-        src += chunk;
-        to  += chunk;
+        free(path);
+        free(plugins);
     }
-    return 0;
 }
 
-int kmalloc(uint64_t *addr, size_t size)
-{
-    int r = assure_ktask();
-    if(r != 0)
-    {
-        return r;
+static void init_krw_handlers(void *ctx) {
+    if (libkrw_initialization(&krw_handlers) != 0) {
+        iterate_plugins(&obtain_krw_funcs, (void**)&krw_handlers.kread);
     }
-
-    mach_vm_address_t va = 0;
-    kern_return_t ret = mach_vm_allocate(gKernelTask, &va, size, VM_FLAGS_ANYWHERE);
-    if(ret == KERN_SUCCESS)
-    {
-        *addr = va;
-        return 0;
-    }
-    if(ret == KERN_INVALID_ARGUMENT)
-    {
-        return EINVAL;
-    }
-    if(ret == KERN_NO_SPACE || ret == KERN_RESOURCE_SHORTAGE)
-    {
-        return ENOMEM;
-    }
-    return EDEVERR;
+    iterate_plugins(&obtain_kcall_funcs, (void**)&krw_handlers.kcall);
 }
 
-int kdealloc(uint64_t addr, size_t size)
-{
-    int r = assure_ktask();
-    if(r != 0)
-    {
-        return r;
-    }
-
-    kern_return_t ret = mach_vm_deallocate(gKernelTask, addr, size);
-    if(ret == KERN_SUCCESS)
-    {
-        return 0;
-    }
-    if(ret == KERN_INVALID_ARGUMENT)
-    {
-        return EINVAL;
-    }
-    return EDEVERR;
+int kbase(uint64_t *addr) {
+    dispatch_once_f(&init_krw_handlers_once, NULL, &init_krw_handlers);
+    if (krw_handlers.kbase == NULL) return ENOTSUP;
+    return krw_handlers.kbase(addr);
 }
 
-int kcall(uint64_t func, size_t argc, const uint64_t *argv, uint64_t *ret)
-{
-    return ENOTSUP;
+int kread(uint64_t from, void *to, size_t len) {
+    dispatch_once_f(&init_krw_handlers_once, NULL, &init_krw_handlers);
+    if (krw_handlers.kread == NULL) return ENOTSUP;
+    return krw_handlers.kread(from, to, len);
 }
 
-int physread(uint64_t from, void *to, size_t len, uint8_t granule)
-{
-    return ENOTSUP;
+int kwrite(void *from, uint64_t to, size_t len) {
+    dispatch_once_f(&init_krw_handlers_once, NULL, &init_krw_handlers);
+    if (krw_handlers.kwrite == NULL) return ENOTSUP;
+    return krw_handlers.kwrite(from, to, len);
 }
 
-int physwrite(void *from, uint64_t to, size_t len, uint8_t granule)
-{
-    return ENOTSUP;
+int kmalloc(uint64_t *addr, size_t size) {
+    dispatch_once_f(&init_krw_handlers_once, NULL, &init_krw_handlers);
+    if (krw_handlers.kmalloc == NULL) return ENOTSUP;
+    return krw_handlers.kmalloc(addr, size);
+}
+
+int kdealloc(uint64_t addr, size_t size) {
+    dispatch_once_f(&init_krw_handlers_once, NULL, &init_krw_handlers);
+    if (krw_handlers.kdealloc == NULL) return ENOTSUP;
+    return krw_handlers.kdealloc(addr, size);
+}
+
+int kcall(uint64_t func, size_t argc, const uint64_t *argv, uint64_t *ret) {
+    dispatch_once_f(&init_krw_handlers_once, NULL, &init_krw_handlers);
+    if (krw_handlers.kcall == NULL) return ENOTSUP;
+    return krw_handlers.kcall(func, argc, argv, ret);
+}
+
+int physread(uint64_t from, void *to, size_t len, uint8_t granule) {
+    dispatch_once_f(&init_krw_handlers_once, NULL, &init_krw_handlers);
+    if (krw_handlers.physread == NULL) return ENOTSUP;
+    return krw_handlers.physread(from, to, len, granule);
+}
+
+int physwrite(void *from, uint64_t to, size_t len, uint8_t granule) {
+    dispatch_once_f(&init_krw_handlers_once, NULL, &init_krw_handlers);
+    if (krw_handlers.physwrite == NULL) return ENOTSUP;
+    return krw_handlers.physwrite(from, to, len, granule);
 }
