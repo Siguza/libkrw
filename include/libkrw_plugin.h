@@ -79,11 +79,11 @@ typedef struct krw_handlers_s* krw_handlers_t;
  * handlers->kmalloc, and handlers->kdealloc as possible on success - any not set will
  * return unsupported.
  *
- * Called krw_initializer_t krw_kcall_initializer is called when a plugin is opened to
+ * Called krw_initializer_t kcall_initializer is called when a plugin is opened to
  * determine if read/write primitives are available.  It is passed a structure containing
  * populated kread/kwrite functions
  *
- * krw_kcall_initializer should set as many of handlers->kcall, handlers->physread, and
+ * kcall_initializer should set as many of handlers->kcall, handlers->physread, and
  * handlers->physwrite as possible on success.  any not set will return unsupported.
  *
  * Retuns 0 if read/write are supported by this plugin

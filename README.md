@@ -40,21 +40,23 @@ See [`include/libkrw.h`](https://github.com/Siguza/libkrw/blob/master/include/li
 
 ##### For writing your own implementation of libkrw:
 
-1. Implement the functions declared in [`include/libkrw.h`](https://github.com/Siguza/libkrw/blob/master/include/libkrw.h).
-2. Compile with `-Wl,-install_name,/usr/lib/libkrw.0.dylib`.
-3. Add this to the `control` of your deb file:  
+Starting with version 1.1.0, libkrw supports a plugin interface so you no longer need to create a package to replace it.
+
+1. See [`include/libkrw_plugin.h`](https://github.com/Siguza/libkrw/blob/master/include/libkrw_plugin.h) for documentation.
+2. Implement and export either a function called `krw_initializer` or `kcall_initializer` that takes a `krw_handlers_t` argument.
+3. Install all handlers that you support.
+4. Compile with `-Wl,-bundle`.
+5. Name it `/usr/lib/libkrw/[name].dylib`.
+6. Add this to the `control` of your deb file:  
    ```
-   Package: your.name.libkrw
-   Provides: libkrw
-   Conflicts: libkrw
-   Replaces: libkrw
+   Depends: libkrw
    ```
-   Please **DO NOT** name your package just `libkrw`!
 
 ##### For using the default implementation:
 
-The default implementation resides in [`src/libkrw.c`](https://github.com/Siguza/libkrw/blob/master/src/libkrw.c).  
-You can build with:
+The default implementation resides in [`src/libkrw_tfp0.c`](https://github.com/Siguza/libkrw/blob/master/src/libkrw_tfp0.c).  
+It is automatically selected as a fallback when no plugins are present.  
+If you want to build it yourself, you can do so with:
 
     make all    # builds the dylib and tbd
     make deb    # builds the deb packages
