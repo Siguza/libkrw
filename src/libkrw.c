@@ -75,7 +75,7 @@ static void iterate_plugins(int (*callback)(void *), void **check) {
     if (nument != -1) {
         char *path = strdup("/usr/lib/libkrw/");
         size_t path_size = strlen("/usr/lib/libkrw/");
-        for (int i=0; (krw_handlers.kread == NULL || krw_handlers.kcall == NULL) && i<nument; i++) {
+        for (int i=0; *check == NULL && i<nument; i++) {
             size_t plugin_path_len = strlen("/usr/lib/libkrw/") + plugins[i]->d_namlen;
             if (path_size < plugin_path_len) {
                 char *newpath = realloc(path, plugin_path_len + 1);
@@ -90,12 +90,13 @@ static void iterate_plugins(int (*callback)(void *), void **check) {
                 fprintf(stderr, "Error attempting to load plugin %s: %s\n", path, dlerror());
                 continue;
             }
-            if (*check == NULL) {
-                if (callback(plugin) == EINVAL) {
-                    fprintf(stderr, "KRW plugin %s did not provide functions it purported to provide\n", path);
-                }
+            int rv = callback(plugin);
+            if (rv == 0) break;
+
+            if (rv == EINVAL) {
+                fprintf(stderr, "KRW plugin %s did not provide functions it purported to provide\n", path);
             }
-            // We failed, try next
+            // We failed, will try next
             dlclose(plugin);
         }
         free(path);
