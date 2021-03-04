@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <mach/mach.h>
 #include "libkrw.h"
+#include "libkrw_plugin.h"
 
 extern kern_return_t mach_vm_read_overwrite(task_t task, mach_vm_address_t addr, mach_vm_size_t size, mach_vm_address_t data, mach_vm_size_t *outsize);
 extern kern_return_t mach_vm_write(task_t task, mach_vm_address_t addr, mach_vm_address_t data, mach_msg_type_number_t dataCnt);

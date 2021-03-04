@@ -2,11 +2,12 @@
 #include <dispatch/dispatch.h>
 #include <dlfcn.h>
 #include <errno.h>
-#include <libkrw.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
+#include "libkrw.h"
+#include "libkrw_plugin.h"
 #include "libkrw_tfp0.h"
 
 static struct krw_handlers_s krw_handlers;
