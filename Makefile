@@ -44,7 +44,7 @@ $(PKG)/dev/control.tar.gz: $(PKG)/dev/control
 $(PKG)/bin/data.tar.lzma: $(PKG)/bin/data/usr/lib/$(TARGET).$(ABI_VERSION).dylib
 	tar -c --lzma -f $@ --format ustar -C $(PKG)/bin/data --exclude '.DS_Store' --exclude '._*' ./
 
-$(PKG)/dev/data.tar.lzma: $(PKG)/dev/data/usr/lib/$(TARGET).dylib $(PKG)/dev/data/usr/include/$(TARGET).h
+$(PKG)/dev/data.tar.lzma: $(PKG)/dev/data/usr/lib/$(TARGET).dylib $(PKG)/dev/data/usr/include/$(TARGET).h $(PKG)/dev/data/usr/include/$(TARGET)_plugin.h
 	tar -c --lzma -f $@ --format ustar -C $(PKG)/dev/data --exclude '.DS_Store' --exclude '._*' ./
 
 $(PKG)/bin/debian-binary: | $(PKG)/bin
@@ -86,7 +86,7 @@ $(PKG)/bin/data/usr/lib/$(TARGET).$(ABI_VERSION).dylib: $(TARGET).$(ABI_VERSION)
 $(PKG)/dev/data/usr/lib/$(TARGET).dylib: | $(PKG)/dev/data/usr/lib
 	( cd "$(PKG)/dev/data/usr/lib"; ln -sf $(TARGET).$(ABI_VERSION).dylib $(TARGET).dylib; )
 
-$(PKG)/dev/data/usr/include/$(TARGET).h: $(INC)/$(TARGET).h | $(PKG)/dev/data/usr/include
+$(PKG)/dev/data/usr/include/%.h: $(INC)/%.h | $(PKG)/dev/data/usr/include
 	cp $< $@
 
 $(PKG)/bin $(PKG)/dev $(PKG)/bin/data/usr/lib $(PKG)/dev/data/usr/lib $(PKG)/dev/data/usr/include:
