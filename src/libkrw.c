@@ -35,7 +35,7 @@ static int obtain_kcall_funcs(void *plugin) {
 
     // We got a plugin that says it can handle kcall
     if (handlers.kcall == NULL) {
-        return EINVAL;
+        return ENOSYS;
     }
     if (handlers.version > LIBKRW_HANDLERS_VERSION) {
         fprintf(stderr, "Detected plugin of higher API version, please update libkrw if possible\n");
@@ -56,7 +56,7 @@ static int obtain_krw_funcs(void *plugin) {
 
     // We got a plugin that says it can handle krw
     if (handlers.kread == NULL || handlers.kwrite == NULL) {
-        return EINVAL;
+        return ENOSYS;
     }
     if (handlers.version > LIBKRW_HANDLERS_VERSION) {
         fprintf(stderr, "Detected plugin of higher API version, please update libkrw if possible\n");
@@ -94,7 +94,7 @@ static void iterate_plugins(int (*callback)(void *), void **check) {
             int rv = callback(plugin);
             if (rv == 0) break;
 
-            if (rv == EINVAL) {
+            if (rv == ENOSYS) {
                 fprintf(stderr, "KRW plugin %s did not provide functions it purported to provide\n", path);
             }
             // We failed, will try next
