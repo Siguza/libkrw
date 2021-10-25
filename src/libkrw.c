@@ -84,6 +84,7 @@ static void iterate_plugins(int (*callback)(void *), void **check) {
                     fprintf(stderr, "Fatal Error: unable to realloc\n");
                     continue; // We failed to realloc - try next plugin I guess
                 }
+                path = newpath;
             }
             strcpy(path+strlen("/usr/lib/libkrw/"), plugins[i]->d_name);
             void *plugin = dlopen(path, RTLD_LOCAL|RTLD_LAZY);
