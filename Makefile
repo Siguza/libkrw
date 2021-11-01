@@ -1,5 +1,5 @@
 ABI_VERSION     := 0
-CURRENT_VERSION := 1.1.0
+CURRENT_VERSION := 1.1.1
 COMPAT_VERSION  := 1.0.0
 #PACKAGE_DOMAIN  := net.siguza.
 
@@ -15,6 +15,8 @@ SIGN            ?= codesign
 SIGN_FLAGS      ?= -s -
 TAPI            ?= xcrun -sdk iphoneos tapi
 TAPI_FLAGS      ?= stubify --no-uuids --filetype=tbd-v2
+TAR             ?= bsdtar
+TAR_FLAGS       ?= --uid 0 --gid 0
 
 .PHONY: all deb clean
 
@@ -36,16 +38,16 @@ $(PACKAGE_DOMAIN)$(TARGET)-dev_$(CURRENT_VERSION)_iphoneos-arm.deb: $(PKG)/dev/c
 	( cd "$(PKG)/dev"; ar -cr "../../$@" 'debian-binary' 'control.tar.gz' 'data.tar.lzma'; )
 
 $(PKG)/bin/control.tar.gz: $(PKG)/bin/control
-	tar -czf $@ --format ustar -C $(PKG)/bin --exclude '.DS_Store' --exclude '._*' ./control
+	$(TAR) $(TAR_FLAGS) -czf $@ --format ustar -C $(PKG)/bin --exclude '.DS_Store' --exclude '._*' ./control
 
 $(PKG)/dev/control.tar.gz: $(PKG)/dev/control
-	tar -czf $@ --format ustar -C $(PKG)/dev --exclude '.DS_Store' --exclude '._*' ./control
+	$(TAR) $(TAR_FLAGS) -czf $@ --format ustar -C $(PKG)/dev --exclude '.DS_Store' --exclude '._*' ./control
 
 $(PKG)/bin/data.tar.lzma: $(PKG)/bin/data/usr/lib/$(TARGET).$(ABI_VERSION).dylib
-	tar -c --lzma -f $@ --format ustar -C $(PKG)/bin/data --exclude '.DS_Store' --exclude '._*' ./
+	$(TAR) $(TAR_FLAGS) -c --lzma -f $@ --format ustar -C $(PKG)/bin/data --exclude '.DS_Store' --exclude '._*' ./
 
 $(PKG)/dev/data.tar.lzma: $(PKG)/dev/data/usr/lib/$(TARGET).dylib $(PKG)/dev/data/usr/include/$(TARGET).h $(PKG)/dev/data/usr/include/$(TARGET)_plugin.h
-	tar -c --lzma -f $@ --format ustar -C $(PKG)/dev/data --exclude '.DS_Store' --exclude '._*' ./
+	$(TAR) $(TAR_FLAGS) -c --lzma -f $@ --format ustar -C $(PKG)/dev/data --exclude '.DS_Store' --exclude '._*' ./
 
 $(PKG)/bin/debian-binary: | $(PKG)/bin
 	echo '2.0' > $@
